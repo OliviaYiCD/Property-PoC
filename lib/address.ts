@@ -2,26 +2,29 @@ export type StructuredAddress = {
     formattedAddress: string;
     lat: number | null;
     lng: number | null;
-    unit?: string | null;             // subpremise (e.g., Unit 5)
-    streetNumber?: string | null;     // street_number
-    street?: string | null;           // route
-    suburb?: string | null;           // locality / postal_town
-    state?: string | null;            // administrative_area_level_1
-    postcode?: string | null;         // postal_code
-    country?: string | null;          // country short_name
+    unit?: string | null;
+    streetNumber?: string | null;
+    street?: string | null;
+    suburb?: string | null;
+    state?: string | null;
+    postcode?: string | null;
+    country?: string | null;
   };
   
-  export function parsePlace(place: google.maps.places.PlaceResult): StructuredAddress {
-    const comp = place.address_components || [];
-    const get = (type: string, field: "short_name" | "long_name" = "short_name") =>
-      comp.find(c => c.types.includes(type))?.[field] ?? null;
+  export function parsePlace(place: any): StructuredAddress {
+    const comps = place?.address_components || [];
+    const get = (
+      type: string,
+      field: "short_name" | "long_name" = "short_name"
+    ) => comps.find((c: any) => c.types?.includes(type))?.[field] ?? null;
   
-    const lat = place.geometry?.location?.lat?.() ?? null;
-    const lng = place.geometry?.location?.lng?.() ?? null;
+    const lat = place?.geometry?.location?.lat?.() ?? null;
+    const lng = place?.geometry?.location?.lng?.() ?? null;
   
     return {
-      formattedAddress: place.formatted_address || "",
-      lat, lng,
+      formattedAddress: place?.formatted_address || "",
+      lat,
+      lng,
       unit: get("subpremise"),
       streetNumber: get("street_number"),
       street: get("route", "long_name"),

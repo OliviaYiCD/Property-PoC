@@ -1,50 +1,67 @@
 "use client";
-import { useRef } from "react";
-import { Autocomplete, LoadScript } from "@react-google-maps/api";
+
+import { useEffect, useRef } from "react";
+import Script from "next/script";
 import { parsePlace, type StructuredAddress } from "@/lib/address";
 
-const libraries: ("places")[] = ["places"];
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
-export default function AddressField({
-  value,
-  onChange,
-  onVerified,
-}: {
+type Props = {
   value: string;
   onChange: (v: string) => void;
-  onVerified: (details: StructuredAddress) => void; // returns structured details
-}) {
-  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  onVerified: (details: StructuredAddress) => void;
+};
 
-  const onPlaceChanged = () => {
-    const auto = autocompleteRef.current;
-    if (!auto) return;
-    const place = auto.getPlace();
-    if (!place || !place.formatted_address) return;
+export default function AddressField({ value, onChange, onVerified }: Props) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
-    const parsed = parsePlace(place);
-    onChange(parsed.formattedAddress);
-    onVerified(parsed); // pass structured data up
-  };
+  useEffect(() => {
+    function init() {
+      const w = window as any;
+      if (!w.google || !inputRef.current) return;
+      const ac = new w.google.maps.places.Autocomplete(inputRef.current, {
+        types: ["address"],
+        componentRestrictions: { country: "au" },
+      });
+      ac.addListener("place_changed", () => {
+        const place = ac.getPlace?.();
+        if (!place?.formatted_address) return;
+        const parsed = parsePlace(place);
+        onChange(parsed.formattedAddress);
+        onVerified(parsed);
+      });
+    }
+    // try now (in case script already loaded)
+    init();
+    // also listen for script load later
+    (window as any).__initPlaces = init;
+  }, [onChange, onVerified]);
 
   return (
-    <LoadScript googleMapsApiKey={process.env.NEXT_PUBLIC_GOOGLE_API_KEY!} libraries={libraries}>
-      <Autocomplete onLoad={(a) => (autocompleteRef.current = a)} onPlaceChanged={onPlaceChanged}>
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)} // typing clears verification in parent
-          placeholder="Start typing address…"
-          style={{
-            width: "100%",
-            padding: "12px 44px 12px 12px",
-            border: "1px solid #ddd",
-            borderRadius: 10,
-            fontSize: 16,
-            color: "#333333",
-          }}
-        />
-      </Autocomplete>
-    </LoadScript>
+    <>
+      <Script
+        id="google-places"
+        src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_API_KEY}&libraries=places`}
+        strategy="afterInteractive"
+        onLoad={() => {
+          const fn = (window as any).__initPlaces;
+          if (typeof fn === "function") fn();
+        }}
+      />
+      <input
+        ref={inputRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Start typing address…"
+        style={{
+          width: "100%",
+          padding: "12px 44px 12px 12px",
+          border: "1px solid #ddd",
+          borderRadius: 10,
+          fontSize: 16,
+          color: "#333333",
+        }}
+      />
+    </>
   );
 }
