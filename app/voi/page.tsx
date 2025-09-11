@@ -15,115 +15,104 @@ export default function VoiPage() {
   const [first, setFirst] = useState("");
   const [last, setLast] = useState("");
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState(""); // e.g. 0468920567
+  const [phone, setPhone] = useState(""); // e.g. 0468…
   const [dob, setDob] = useState("");     // YYYY-MM-DD (AML only)
   const [mode, setMode] = useState<Mode>("biometric");
   const [delivery, setDelivery] = useState<Delivery>("sms");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // If user chooses AML-only, force delivery to Email (no SMS link for AML-only)
+  // AML-only uses email link flow (no SMS)
   useEffect(() => {
     if (mode === "aml_only") setDelivery("email");
   }, [mode]);
 
-  function normaliseAuMobile(raw: string) {
+  function auMobileTo61(raw: string) {
     const digits = raw.replace(/\D/g, "");
     return digits.startsWith("0") ? "61" + digits.slice(1) : digits;
   }
 
-  async function start() {
-    if (mode === "aml_only") return startAmlOnly();
-    return startBiometricFlow();
+  function verificationTypeLabel(m: Mode) {
+    if (m === "aml_only") return "AML";
+    if (m === "biometric_aml") return "Biometric + AML";
+    return "Biometric";
   }
 
-  async function startBiometricFlow() {
+  async function start() {
     setLoading(true);
     setError(null);
     try {
-      const contact_phone = delivery === "sms" ? normaliseAuMobile(phone) : undefined;
-      const communication_method = delivery === "sms" ? "sms" : "link";
+      const verificationType = verificationTypeLabel(mode);
 
-      const res = await fetch("/api/aplyid/send-text", {
+      const payload: any = {
+        firstName: first,
+        lastName: last,
+        email,
+        verificationType,            // "Biometric" | "Biometric + AML" | "AML"
+        delivery,                    // "sms" | "email"
+        redirect_success_url: `${VERCEL_ORIGIN}/voi/thanks`,
+        redirect_cancel_url: `${VERCEL_ORIGIN}/voi`,
+      };
+
+      if (delivery === "sms" && mode !== "aml_only") {
+        payload.phone = auMobileTo61(phone); // 61…
+      }
+      if (mode === "aml_only") {
+        payload.dob = dob; // YYYY-MM-DD
+      }
+
+      const res = await fetch("/api/aplyid/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          firstname: first,
-          lastname: last,
-          email,
-          contact_phone,
-          communication_method,
-          reference: `VOI-${Date.now()}`,
-          redirect_success_url:
-            communication_method === "link" ? `${VERCEL_ORIGIN}/voi/thanks` : undefined,
-          redirect_cancel_url:
-            communication_method === "link" ? `${VERCEL_ORIGIN}/voi` : undefined,
-          biometric_only: mode === "biometric",
-        }),
+        body: JSON.stringify(payload),
       });
 
-      const json = await res.json();
-      if (!res.ok || !json.ok) throw new Error(JSON.stringify(json));
+      // Show full error text if not OK
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `Request failed (${res.status})`);
+      }
 
-      if (communication_method === "sms") {
-        alert("SMS sent (if the mobile is valid in AU format).");
+      const data = await res.json().catch(() => ({} as any));
+
+      // If SMS, server should already have triggered the text
+      if (delivery === "sms") {
+        alert("If the mobile is valid, an SMS has been sent.");
         return;
       }
 
-      const startUrl: string | undefined = json.start_process_url;
-      if (!startUrl) throw new Error("No start_process_url returned.");
+      // Email flow expects a start link from the API
+      const startUrl: string | undefined =
+        data.start_process_url || data.url || data.link;
 
-      window.open(startUrl, "_blank");
+      if (startUrl) {
+        // Open the link (optional)
+        window.open(startUrl, "_blank");
 
-      if (email) {
-        const subject = encodeURIComponent("Your APLYiD Identity Verification Link");
-        const body = encodeURIComponent(
-          `Hi ${first || ""},
+        // Compose an email with the link (PoC convenience)
+        if (email) {
+          const subject = encodeURIComponent("Your APLYiD Identity Verification Link");
+          const body = encodeURIComponent(
+            `Hi ${first || ""},
 
-Please complete your identity verification using the secure link below:
+Please complete your verification using the secure link below:
 
 ${startUrl}
 
 Thanks!`
-        );
-        window.location.href = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
+          );
+          window.location.href = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
+        } else {
+          prompt("Copy your verification link:", startUrl);
+        }
       } else {
-        prompt("Copy your verification link:", startUrl);
+        // No link returned — show raw payload so we can debug quickly
+        alert("Started, but no link returned. Check Results or see console.");
+        // eslint-disable-next-line no-console
+        console.log("APLYiD start response:", data);
       }
     } catch (e: any) {
-      setError(e?.message ?? "Failed to start VOI");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function startAmlOnly() {
-    setLoading(true);
-    setError(null);
-    try {
-      // Call our AML API route (next step below)
-      const res = await fetch("/api/aplyid/aml", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          firstname: first,
-          lastname: last,
-          email,
-          dob,                       // YYYY-MM-DD
-          reference: `AML-${Date.now()}`,
-        }),
-      });
-
-      const json = await res.json();
-      if (!res.ok || !json.ok) throw new Error(JSON.stringify(json));
-
-      if (json.report_url) {
-        window.open(json.report_url, "_blank");
-      } else {
-        alert("AML check started. View status on Results.");
-      }
-    } catch (e: any) {
-      setError(e?.message ?? "Failed to start AML-only check");
+      setError(e?.message ?? "Failed to start verification");
     } finally {
       setLoading(false);
     }
@@ -162,9 +151,7 @@ Thanks!`
 
       {/* Verification type */}
       <div style={{ marginTop: 12 }}>
-        <label style={{ fontSize: 14, color: "#666", display: "block", marginBottom: 6 }}>
-          Verification
-        </label>
+        <label style={labelStyle}>Verification</label>
         <select
           value={mode}
           onChange={(e) => setMode(e.target.value as Mode)}
@@ -183,12 +170,10 @@ Thanks!`
         </p>
       </div>
 
-      {/* Delivery (hidden for AML-only; email is enforced there) */}
+      {/* Delivery (hidden for AML-only; email enforced) */}
       {mode !== "aml_only" && (
         <div style={{ marginTop: 12 }}>
-          <label style={{ fontSize: 14, color: "#666", display: "block", marginBottom: 6 }}>
-            Delivery
-          </label>
+          <label style={labelStyle}>Delivery</label>
           <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
             <label style={radioLabel}>
               <input
@@ -223,7 +208,7 @@ Thanks!`
               style={inputStyle}
             />
           </div>
-          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr", marginTop: 12 }}>
+          <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
             <input
               type="date"
               placeholder="DOB (YYYY-MM-DD)"
@@ -245,7 +230,7 @@ Thanks!`
       ) : (
         <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
           <input
-            placeholder="Mobile (e.g. 0468920567)"
+            placeholder="Mobile (e.g. 0468 920 567)"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             style={inputStyle}
@@ -292,6 +277,13 @@ const inputStyle: React.CSSProperties = {
   borderRadius: 8,
   fontSize: 16,
   color: TEXT,
+};
+
+const labelStyle: React.CSSProperties = {
+  fontSize: 14,
+  color: "#666",
+  display: "block",
+  marginBottom: 6,
 };
 
 const radioLabel: React.CSSProperties = {
