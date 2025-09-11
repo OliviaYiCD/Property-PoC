@@ -1,296 +1,327 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 
 const PRIMARY = "#cc3369";
 const TEXT = "#333333";
 
-// Change if your Vercel URL changes
-const VERCEL_ORIGIN = "https://property-po-c-cwf7.vercel.app";
+type FlowType = "biometric" | "biometric_aml" | "aml_only";
+type Comm = "link" | "sms" | "email";
 
-type Mode = "biometric" | "biometric_aml" | "aml_only";
-type Delivery = "sms" | "email";
-
-export default function VoiPage() {
-  const [first, setFirst] = useState("");
-  const [last, setLast] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState(""); // e.g. 0468…
-  const [dob, setDob] = useState("");     // YYYY-MM-DD (AML only)
-  const [mode, setMode] = useState<Mode>("biometric");
-  const [delivery, setDelivery] = useState<Delivery>("sms");
-  const [loading, setLoading] = useState(false);
+export default function VOIPage() {
+  const [flow, setFlow] = useState<FlowType>("aml_only"); // default to AML-only for your test
+  const [comm, setComm] = useState<Comm>("link");
+  const [first, setFirst] = useState("Olivia");
+  const [last, setLast] = useState("Yi");
+  const [email, setEmail] = useState("yiqiwei333@gmail.com");
+  const [phone, setPhone] = useState("");
+  const [dob, setDob] = useState("01/01/1990"); // DD/MM/YYYY for PEP
+  const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [startUrl, setStartUrl] = useState<string | null>(null);
+  const [pepResult, setPepResult] = useState<any>(null);
 
-  // AML-only uses email link flow (no SMS)
-  useEffect(() => {
-    if (mode === "aml_only") setDelivery("email");
-  }, [mode]);
+  const showPhone = comm === "sms";
+  const showEmail = comm === "email" || flow !== "aml_only"; // email is needed for biometric invite
 
-  function auMobileTo61(raw: string) {
-    const digits = raw.replace(/\D/g, "");
-    return digits.startsWith("0") ? "61" + digits.slice(1) : digits;
-  }
+  const payload = useMemo(
+    () => ({
+      firstname: first,
+      lastname: last,
+      email: showEmail ? email : undefined,
+      phone: showPhone ? phone : undefined,
+      communication_method: comm as "link" | "sms" | "email",
+      dob, // only used by AML/PEP route (ignored by identity-verifications)
+      mode: flow,
+    }),
+    [first, last, email, phone, comm, dob, flow, showEmail, showPhone]
+  );
 
-  function verificationTypeLabel(m: Mode) {
-    if (m === "aml_only") return "AML";
-    if (m === "biometric_aml") return "Biometric + AML";
-    return "Biometric";
-  }
-
-  async function start() {
-    setLoading(true);
+  async function startBiometricOrCombo(fakeOverride?: boolean) {
     setError(null);
+    setStarting(true);
+    setStartUrl(null);
+    setPepResult(null);
     try {
-      const verificationType = verificationTypeLabel(mode);
+      const qs = new URLSearchParams();
+      if (typeof fakeOverride === "boolean")
+        qs.set("fake", fakeOverride ? "1" : "0");
 
-      const payload: any = {
-        firstName: first,
-        lastName: last,
-        email,
-        verificationType,            // "Biometric" | "Biometric + AML" | "AML"
-        delivery,                    // "sms" | "email"
-        redirect_success_url: `${VERCEL_ORIGIN}/voi/thanks`,
-        redirect_cancel_url: `${VERCEL_ORIGIN}/voi`,
-      };
-
-      if (delivery === "sms" && mode !== "aml_only") {
-        payload.phone = auMobileTo61(phone); // 61…
-      }
-      if (mode === "aml_only") {
-        payload.dob = dob; // YYYY-MM-DD
-      }
-
-      const res = await fetch("/api/aplyid/start", {
+      const res = await fetch(`/api/aplyid/start?${qs.toString()}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+      const data = await res.json();
 
-      // Show full error text if not OK
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || `Request failed (${res.status})`);
-      }
-
-      const data = await res.json().catch(() => ({} as any));
-
-      // If SMS, server should already have triggered the text
-      if (delivery === "sms") {
-        alert("If the mobile is valid, an SMS has been sent.");
-        return;
-      }
-
-      // Email flow expects a start link from the API
-      const startUrl: string | undefined =
-        data.start_process_url || data.url || data.link;
-
-      if (startUrl) {
-        // Open the link (optional)
-        window.open(startUrl, "_blank");
-
-        // Compose an email with the link (PoC convenience)
-        if (email) {
-          const subject = encodeURIComponent("Your APLYiD Identity Verification Link");
-          const body = encodeURIComponent(
-            `Hi ${first || ""},
-
-Please complete your verification using the secure link below:
-
-${startUrl}
-
-Thanks!`
-          );
-          window.location.href = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
-        } else {
-          prompt("Copy your verification link:", startUrl);
-        }
+      if (!res.ok || !data.ok) {
+        setError(
+          data?.error ||
+            `Failed to start verification (status ${res.status}). ${data?.hint || ""}`
+        );
       } else {
-        // No link returned — show raw payload so we can debug quickly
-        alert("Started, but no link returned. Check Results or see console.");
-        // eslint-disable-next-line no-console
-        console.log("APLYiD start response:", data);
+        setStartUrl(data.start_process_url || null);
       }
     } catch (e: any) {
-      setError(e?.message ?? "Failed to start verification");
+      setError(e?.message || "Network error");
     } finally {
-      setLoading(false);
+      setStarting(false);
     }
   }
 
-  const disabled =
-    loading ||
-    !first ||
-    !last ||
-    (mode === "aml_only"
-      ? !email || !dob
-      : delivery === "sms"
-      ? !phone
-      : !email);
+  async function startPepOnly(fakeOverride?: boolean) {
+    setError(null);
+    setStarting(true);
+    setStartUrl(null);
+    setPepResult(null);
+    try {
+      const qs = new URLSearchParams();
+      if (typeof fakeOverride === "boolean")
+        qs.set("fake", fakeOverride ? "1" : "0");
+
+      const res = await fetch(`/api/aplyid/pep?${qs.toString()}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firstname: payload.firstname,
+          lastname: payload.lastname,
+          dob: payload.dob, // DD/MM/YYYY
+        }),
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.ok) {
+        setError(
+          data?.error ||
+            `PEP check failed (status ${res.status}). ${data?.hint || ""}`
+        );
+      } else {
+        setPepResult(data.raw || data);
+      }
+    } catch (e: any) {
+      setError(e?.message || "Network error");
+    } finally {
+      setStarting(false);
+    }
+  }
+
+  async function handleStart(fakeOverride?: boolean) {
+    if (flow === "aml_only") {
+      return startPepOnly(fakeOverride);
+    }
+    // biometric or combo
+    return startBiometricOrCombo(fakeOverride);
+  }
 
   return (
-    <main style={{ maxWidth: 720, margin: "0 auto", padding: "40px 16px" }}>
-      <h1>VOI + AML</h1>
-      <p>Enter details, choose verification type & delivery, then click <b>Start</b>.</p>
+    <div>
+      <h1 className="text-2xl font-bold mb-2" style={{ color: TEXT }}>
+        VOI + AML
+      </h1>
+      <p className="mb-6" style={{ color: TEXT }}>
+        Start a verification or run a PEP (AML) check.
+      </p>
 
-      {/* Name */}
-      <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr", marginTop: 16 }}>
-        <input
-          placeholder="First name"
-          value={first}
-          onChange={(e) => setFirst(e.target.value)}
-          style={inputStyle}
-        />
-        <input
-          placeholder="Last name"
-          value={last}
-          onChange={(e) => setLast(e.target.value)}
-          style={inputStyle}
-        />
-      </div>
-
-      {/* Verification type */}
-      <div style={{ marginTop: 12 }}>
-        <label style={labelStyle}>Verification</label>
-        <select
-          value={mode}
-          onChange={(e) => setMode(e.target.value as Mode)}
-          style={{ ...inputStyle, width: "100%", background: "white", appearance: "none" }}
-        >
-          <option value="biometric">Biometric Only</option>
-          <option value="biometric_aml">Biometric + AML Check</option>
-          <option value="aml_only">AML Check Only</option>
-        </select>
-        <p style={{ marginTop: 8, color: "#666", fontSize: 13 }}>
-          {mode === "biometric"
-            ? "Face + ID document verification."
-            : mode === "biometric_aml"
-            ? "Face + ID document verification with AML screening (PEP/sanctions, etc.)."
-            : "Run AML screening only (no biometric capture)."}
-        </p>
-      </div>
-
-      {/* Delivery (hidden for AML-only; email enforced) */}
-      {mode !== "aml_only" && (
-        <div style={{ marginTop: 12 }}>
-          <label style={labelStyle}>Delivery</label>
-          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-            <label style={radioLabel}>
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* Flow selection */}
+        <div className="rounded-lg border p-4">
+          <h2 className="font-semibold mb-3">Verification type</h2>
+          <div className="flex flex-col gap-2">
+            <label className="flex items-center gap-2">
               <input
                 type="radio"
-                name="delivery"
-                checked={delivery === "sms"}
-                onChange={() => setDelivery("sms")}
-              />{" "}
+                name="flow"
+                checked={flow === "biometric"}
+                onChange={() => setFlow("biometric")}
+              />
+              Biometric only
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="flow"
+                checked={flow === "biometric_aml"}
+                onChange={() => setFlow("biometric_aml")}
+              />
+              Biometric + AML
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="flow"
+                checked={flow === "aml_only"}
+                onChange={() => setFlow("aml_only")}
+              />
+              AML (PEP) only
+            </label>
+          </div>
+        </div>
+
+        {/* Delivery + Person details */}
+        <div className="rounded-lg border p-4">
+          <h2 className="font-semibold mb-3">Delivery & person</h2>
+
+          {/* Only relevant to biometric flows */}
+          <label className="block text-sm font-medium">Delivery method</label>
+          <div className="flex gap-3 mb-3">
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="comm"
+                checked={comm === "link"}
+                onChange={() => setComm("link")}
+                disabled={flow === "aml_only"}
+              />
+              Link / QR
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="comm"
+                checked={comm === "sms"}
+              onChange={() => setComm("sms")}
+              disabled={flow === "aml_only"}
+              />
               SMS
             </label>
-            <label style={radioLabel}>
+            <label className="flex items-center gap-2">
               <input
                 type="radio"
-                name="delivery"
-                checked={delivery === "email"}
-                onChange={() => setDelivery("email")}
-              />{" "}
+                name="comm"
+                checked={comm === "email"}
+                onChange={() => setComm("email")}
+                disabled={flow === "aml_only"}
+              />
               Email
             </label>
           </div>
-        </div>
-      )}
 
-      {/* Contact & DOB */}
-      {mode === "aml_only" ? (
-        <>
-          <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
-            <input
-              placeholder="Email (to send the report/link)"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              style={inputStyle}
-            />
+          <div className="grid grid-cols-1 gap-3">
+            <div>
+              <label className="block text-sm font-medium">First name</label>
+              <input
+                value={first}
+                onChange={(e) => setFirst(e.target.value)}
+                className="w-full rounded-lg border px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium">Last name</label>
+              <input
+                value={last}
+                onChange={(e) => setLast(e.target.value)}
+                className="w-full rounded-lg border px-3 py-2"
+              />
+            </div>
+
+            {/* Email only matters for biometric invites */}
+            {flow !== "aml_only" && (
+              <div>
+                <label className="block text-sm font-medium">Email</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full rounded-lg border px-3 py-2"
+                />
+              </div>
+            )}
+
+            {/* DOB required for AML/PEP */}
+            {flow === "aml_only" && (
+              <div>
+                <label className="block text-sm font-medium">
+                  Date of birth (DD/MM/YYYY)
+                </label>
+                <input
+                  value={dob}
+                  onChange={(e) => setDob(e.target.value)}
+                  className="w-full rounded-lg border px-3 py-2"
+                  placeholder="DD/MM/YYYY"
+                />
+              </div>
+            )}
+
+            {flow !== "aml_only" && showPhone && (
+              <div>
+                <label className="block text-sm font-medium">Phone</label>
+                <input
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full rounded-lg border px-3 py-2"
+                  placeholder="+61…"
+                />
+              </div>
+            )}
           </div>
-          <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
-            <input
-              type="date"
-              placeholder="DOB (YYYY-MM-DD)"
-              value={dob}
-              onChange={(e) => setDob(e.target.value)}
-              style={inputStyle}
-            />
-          </div>
-        </>
-      ) : delivery === "email" ? (
-        <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
-          <input
-            placeholder="Email (to send the verification link)"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            style={inputStyle}
-          />
         </div>
-      ) : (
-        <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
-          <input
-            placeholder="Mobile (e.g. 0468 920 567)"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            style={inputStyle}
-          />
-          <p style={{ marginTop: -4, color: "#666", fontSize: 13 }}>
-            We convert <code>04…</code> to <code>61…</code> automatically.
-          </p>
-        </div>
-      )}
+      </div>
 
-      <button
-        onClick={start}
-        disabled={disabled}
-        style={{
-          marginTop: 16,
-          padding: "10px 16px",
-          borderRadius: 8,
-          color: "#fff",
-          background: disabled ? "#bbb" : PRIMARY,
-          border: "none",
-          fontWeight: 700,
-        }}
-      >
-        {loading ? "Starting…" : mode === "aml_only" ? "Start AML Check" : "Start VOI"}
-      </button>
+      {/* Actions */}
+      <div className="mt-6 flex flex-wrap items-center gap-3">
+        <button
+          className="rounded-lg px-3 py-2"
+          style={{ background: PRIMARY, color: "white" }}
+          onClick={() => handleStart()}
+          disabled={starting}
+        >
+          {starting ? "Submitting…" : flow === "aml_only" ? "Run PEP" : "Start verification"}
+        </button>
 
+        <button
+          className="rounded-lg border px-3 py-2"
+          onClick={() => handleStart(true)}
+          disabled={starting}
+          title="Force FAKE mode for demo"
+        >
+          {flow === "aml_only" ? "Run PEP (fake)" : "Start (fake)"}
+        </button>
+      </div>
+
+      {/* Feedback */}
       {error && (
-        <pre style={{ color: "crimson", marginTop: 12, whiteSpace: "pre-wrap" }}>
+        <div
+          className="mt-4 rounded-md border px-3 py-2"
+          style={{ borderColor: "#fecaca", background: "#fff1f2", color: "#7f1d1d" }}
+        >
           {error}
-        </pre>
+        </div>
       )}
 
-      <p style={{ marginTop: 16, color: "#666" }}>
-        After completion, users are redirected to the “Thanks” page. You can view results on{" "}
-        <a href="/voi/results">Results</a>.
-      </p>
-    </main>
+      {/* Biometric link */}
+      {startUrl && flow !== "aml_only" && (
+        <div className="mt-6 rounded-lg border p-4">
+          <h3 className="font-semibold mb-2">Invite link</h3>
+          <div className="flex items-center gap-2">
+            <input readOnly value={startUrl} className="w-full rounded-lg border px-3 py-2" />
+            <button
+              className="rounded-lg border px-3 py-2"
+              onClick={() => navigator.clipboard.writeText(startUrl)}
+            >
+              Copy
+            </button>
+            <a
+              className="rounded-lg px-3 py-2"
+              style={{ background: PRIMARY, color: "white" }}
+              href={startUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Open
+            </a>
+          </div>
+        </div>
+      )}
+
+      {/* PEP JSON */}
+      {pepResult && flow === "aml_only" && (
+        <div className="mt-6 rounded-lg border p-4">
+          <h3 className="font-semibold mb-2">PEP Result (raw)</h3>
+          <pre className="text-sm overflow-x-auto">
+            {JSON.stringify(pepResult, null, 2)}
+          </pre>
+        </div>
+      )}
+    </div>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  padding: "10px 12px",
-  border: "1px solid #ddd",
-  borderRadius: 8,
-  fontSize: 16,
-  color: TEXT,
-};
-
-const labelStyle: React.CSSProperties = {
-  fontSize: 14,
-  color: "#666",
-  display: "block",
-  marginBottom: 6,
-};
-
-const radioLabel: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 8,
-  padding: "6px 10px",
-  border: "1px solid #eee",
-  borderRadius: 8,
-};
