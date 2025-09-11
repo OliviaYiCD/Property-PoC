@@ -1,23 +1,18 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
-// PoC in-memory store (not persistent on Vercel cold starts)
-const recentEvents: any[] = [];
-
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   const auth = req.headers.get("authorization") || "";
-  const ok = process.env.APLYID_WEBHOOK_SECRET
-    ? auth === `Bearer ${process.env.APLYID_WEBHOOK_SECRET}`
-    : true;
+  const expected = `Basic ${Buffer.from(
+    `${process.env.WEBHOOK_USER}:${process.env.WEBHOOK_PASS}`
+  ).toString("base64")}`;
 
-  if (!ok) return new NextResponse("Unauthorized", { status: 401 });
+  if (auth !== expected) {
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
 
-  const payload = await req.json().catch(() => ({}));
-  recentEvents.unshift({ receivedAt: new Date().toISOString(), payload });
-  if (recentEvents.length > 50) recentEvents.pop();
+  const body = await req.json();
+  console.log("Webhook received:", body);
 
-  return NextResponse.json({ received: true });
-}
-
-export async function GET() {
-  return NextResponse.json({ items: recentEvents });
+  // TODO: save webhook event to database or logs
+  return NextResponse.json({ ok: true });
 }
