@@ -25,51 +25,81 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body style={{ background: BG, color: TEXT }}>
         {/* Top Nav */}
-        <header
-          style={{
-            borderBottom: "1px solid #eee",
-            background: "#fff",
-            position: "sticky",
-            top: 0,
-            zIndex: 20,
-          }}
+        <header className="sticky top-0 z-20 border-b bg-white shadow-sm">
+  <nav className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-3">
+    {/* Left: Logo */}
+    <div className="flex items-center gap-3">
+      <div className="flex h-8 w-8 items-center justify-center rounded-md bg-red-500">
+        <span className="text-white font-bold">D</span>
+      </div>
+      <span className="text-lg font-semibold tracking-tight">UnityLite</span>
+    </div>
+
+    {/* Center: Links */}
+    <div className="hidden md:flex items-center gap-6 text-sm font-medium text-gray-700">
+    <Link href="/" className="hover:text-[#cc3369]">Home</Link>
+    <Link href="/property" className="hover:text-[#cc3369]">Property</Link>
+      <Link href="/company" className="hover:text-[#cc3369]">Company</Link>
+      <Link href="/voi" className="hover:text-[#cc3369]">VOI/AML</Link>
+      <Link href="/digisign" className="hover:text-[#cc3369]">DigiSign</Link>
+      <Link href="/orders" className="hover:text-[#cc3369]">Orders</Link>
+    </div>
+
+    {/* Right: Search + Help + Avatar */}
+    <div className="flex items-center gap-3">
+      {/* Search Box */}
+      <div className="hidden md:flex items-center rounded-md border bg-gray-50 px-2 py-1">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          strokeWidth={2}
+          stroke="currentColor"
+          className="h-4 w-4 text-gray-500"
         >
-          <nav className="mx-auto flex w-full max-w-5xl items-center justify-between px-4 py-3">
-            <Link href="/" className="text-lg font-semibold" style={{ color: TEXT }}>
-              UnityLite PoC
-            </Link>
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z"
+          />
+        </svg>
+        <input
+          type="text"
+          placeholder="Search"
+          className="ml-2 bg-transparent text-sm outline-none"
+        />
+      </div>
 
-            <div className="flex items-center gap-4">
-              <Link href="/" className="hover:underline" style={{ color: TEXT }}>
-                Property
-              </Link>
-              <Link href="/voi" className="hover:underline" style={{ color: TEXT }}>
-                VOI + AML
-              </Link>
-              <Link href="/company" className="hover:underline" style={{ color: TEXT }}>
-                Company search
-              </Link>
-            </div>
+      {/* Help Icon */}
+      <button className="flex h-8 w-8 items-center justify-center rounded-full border hover:bg-gray-100">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          strokeWidth={2}
+          stroke="currentColor"
+          className="h-5 w-5 text-gray-600"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M12 18h.01M12 14a4 4 0 10-4-4h0a4 4 0 004 4z"
+          />
+        </svg>
+      </button>
 
-            {String(process.env.APLYID_FAKE_START).toLowerCase() === "true" && (
-              <span
-                className="rounded-md border px-2 py-1 text-xs"
-                style={{
-                  borderColor: "#ffecb5",
-                  background: "#fff8db",
-                  color: "#7a5b00",
-                }}
-                title="APLYID fake mode is ON for this deployment"
-              >
-                Demo mode
-              </span>
-            )}
-          </nav>
-        </header>
+      {/* Avatar */}
+      <img
+        src="https://randomuser.me/api/portraits/women/44.jpg"
+        alt="Avatar"
+        className="h-8 w-8 rounded-full border"
+      />
+    </div>
+  </nav>
+</header>
 
-        <main className="mx-auto w-full max-w-5xl px-4 py-6">{children}</main>
+        <main className="mx-auto w-full max-w-7xl px-6 py-6">{children}</main>
 
-        {/* small helper class (no styled-jsx) */}
         <style>{`
           .btn-primary {
             background: ${PRIMARY};

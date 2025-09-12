@@ -1,362 +1,340 @@
+// app/page.tsx
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
-import AddressField from "./AddressField";
 
-/** ---------- THEME ---------- */
-const PRIMARY = "#cc3369";
-const TEXT = "#333333";
-const BG = "#ffffff";
+/** ------------------------------
+ *  MOCK DATA
+ *  ------------------------------ */
+type OrderType = "Property" | "VOI" | "AML" | "Company";
+type OrderStatus = "In Progress" | "Completed" | "Needs Attention";
 
-/** ---------- TYPES ---------- */
-type Item = {
+interface OrderRow {
   id: string;
-  label: string;
-  eta: string;
-  priceType:
-    | { kind: "fixed"; amount: number }
-    | { kind: "perLot"; amount: number }
-    | { kind: "perPlan"; amount: number }
-    | { kind: "unknown" };
-  optional?: boolean;
-  checked: boolean;
-};
-
-type LotPlan = {
-  lot: string;
-  planPrefix: string;
-  planNumber: string;
-};
-
-/** ---------- HELPERS ---------- */
-function aud(n: number) {
-  return n.toLocaleString("en-AU", {
-    style: "currency",
-    currency: "AUD",
-    maximumFractionDigits: 2,
-  });
+  type: OrderType;
+  status: OrderStatus;
+  date: string;
+  href: string;
 }
 
-function priceLabel(item: Item) {
-  if (item.priceType.kind === "fixed") return aud(item.priceType.amount);
-  if (item.priceType.kind === "perLot")
-    return `${aud(item.priceType.amount)} per lot`;
-  if (item.priceType.kind === "perPlan")
-    return `${aud(item.priceType.amount)} per plan`;
-  return "Price unknown";
+interface ActivityItem {
+  id: string;
+  title: string;
+  subtitle: string;
+  ago: string;
+  href: string;
+  icon?: string;
 }
 
-function computeTotal(items: Item[]) {
-  let total = 0;
-  for (const it of items) {
-    if (!it.checked) continue;
-    switch (it.priceType.kind) {
-      case "fixed":
-        total += it.priceType.amount;
-        break;
-      case "perLot":
-        total += it.priceType.amount * 1; // assume 1 lot
-        break;
-      case "perPlan":
-        total += it.priceType.amount * 1; // assume 1 plan
-        break;
-      case "unknown":
-        break;
-    }
-  }
-  return total;
+const RECENT_ACTIVITY: ActivityItem[] = [
+  {
+    id: "a1",
+    title: "123 Maple Street, Anytown",
+    subtitle: "Property Search",
+    ago: "2 hours ago",
+    href: "/",
+    icon: "🏠",
+  },
+  {
+    id: "a2",
+    title: "Acme Corp",
+    subtitle: "Company Due Diligence",
+    ago: "1 day ago",
+    href: "/company",
+    icon: "🏢",
+  },
+  {
+    id: "a3",
+    title: "Client Verification – John Smith",
+    subtitle: "VOI + AML Check",
+    ago: "3 days ago",
+    href: "/voi",
+    icon: "🪪",
+  },
+];
+
+const RECENT_ORDERS: OrderRow[] = [
+  {
+    id: "#LS-1024",
+    type: "Property",
+    status: "In Progress",
+    date: "2025-03-10",
+    href: "/",
+  },
+  {
+    id: "#LS-1023",
+    type: "Company",
+    status: "Completed",
+    date: "2025-03-09",
+    href: "/company",
+  },
+  {
+    id: "#LS-1022",
+    type: "VOI",
+    status: "Needs Attention",
+    date: "2025-03-08",
+    href: "/voi",
+  },
+  {
+    id: "#LS-1021",
+    type: "AML",
+    status: "Completed",
+    date: "2025-03-07",
+    href: "/voi",
+  },
+];
+
+const TRENDING = [
+  { label: "Property Title Search", count: 124, href: "/" },
+  { label: "Company Director Search", count: 89, href: "/company" },
+  { label: "AML Individual Check", count: 72, href: "/voi" },
+  { label: "Historical Title Search", count: 56, href: "/" },
+];
+
+const AU_STATES = [
+  { value: "QLD", label: "QLD" },
+  { value: "NSW", label: "NSW" },
+  { value: "VIC", label: "VIC" },
+  { value: "SA", label: "SA" },
+  { value: "WA", label: "WA" },
+  { value: "TAS", label: "TAS" },
+  { value: "ACT", label: "ACT" },
+  { value: "NT", label: "NT" },
+];
+
+function statusChipClass(s: OrderStatus) {
+  if (s === "Completed") return "bg-green-100 text-green-800";
+  if (s === "Needs Attention") return "bg-yellow-100 text-yellow-900";
+  return "bg-blue-100 text-blue-800";
 }
 
-/** Detect QLD Lot/Plan patterns like "12/RP12345" or "Lot 7 SP123456" */
-function detectLotPlan(input: string): LotPlan | null {
-  const s = input.trim();
-  const patA =
-    /\b(?:lot|l)\s*(\d+)\s*(?:on\s*)?([a-zA-Z]{1,5})\s*0*?(\d{1,8})\b/i;
-  const patB = /\b(\d+)\s*\/\s*([a-zA-Z]{1,5})\s*0*?(\d{1,8})\b/;
+/** ------------------------------
+ *  PAGE
+ *  ------------------------------ */
+export default function DashboardPage() {
+  const metrics = useMemo(() => {
+    const inProgress =
+      RECENT_ORDERS.filter((o) => o.status === "In Progress").length + 12;
+    const completed =
+      RECENT_ORDERS.filter((o) => o.status === "Completed").length + 5;
+    const needsAttention =
+      RECENT_ORDERS.filter((o) => o.status === "Needs Attention").length + 2;
+    return { inProgress, completed, needsAttention };
+  }, []);
 
-  const mA = s.match(patA);
-  if (mA) {
-    return {
-      lot: mA[1],
-      planPrefix: mA[2].toUpperCase(),
-      planNumber: mA[3],
-    };
-  }
-  const mB = s.match(patB);
-  if (mB) {
-    return {
-      lot: mB[1],
-      planPrefix: mB[2].toUpperCase(),
-      planNumber: mB[3],
-    };
-  }
-  return null;
-}
+  const [query, setQuery] = useState("");
+  const [stateFilter, setStateFilter] = useState<string>("");
 
-export default function Page() {
-  /** Single input: Address OR Lot/Plan */
-  const [input, setInput] = useState("");
-  const [verified, setVerified] = useState(false); // Google verified address
-  const lp = useMemo(() => detectLotPlan(input), [input]);
-
-  /** Property type toggle (to show Body Corporate item) */
-  const [propertyType, setPropertyType] = useState<"house" | "strata">("house");
-
-  /** Show results */
-  const [showResults, setShowResults] = useState(false);
-
-  /** Items */
-  const initialItems = useMemo<Item[]>(
-    () => [
-      {
-        id: "qld-seller-disclosure-form",
-        label: "QLD Seller Disclosure Form",
-        eta: "instant",
-        priceType: { kind: "fixed", amount: 0 },
-        checked: true,
-      },
-      {
-        id: "title",
-        label: "Title",
-        eta: "instant",
-        priceType: { kind: "perLot", amount: 19.0 },
-        checked: true,
-      },
-      {
-        id: "plan",
-        label: "Plan",
-        eta: "instant",
-        priceType: { kind: "perPlan", amount: 20.72 },
-        checked: true,
-      },
-      {
-        id: "current-rates",
-        label: "Current Rates Balance",
-        eta: "48 hours",
-        priceType: { kind: "fixed", amount: 0 },
-        checked: true,
-      },
-      {
-        id: "water-meter",
-        label: "Water Meter Reading",
-        eta: "instant",
-        priceType: { kind: "perLot", amount: 49.25 },
-        checked: true,
-      },
-      {
-        id: "contaminated-land",
-        label: "Contaminated Land Search",
-        eta: "24 hours",
-        priceType: { kind: "unknown" },
-        checked: true,
-      },
-      {
-        id: "zoning",
-        label: "Seller Disclosure Zoning Report",
-        eta: "24 hours",
-        priceType: { kind: "fixed", amount: 55 },
-        checked: true,
-      },
-      {
-        id: "contamination-notices",
-        label: "Contamination Notices (optional)",
-        eta: "24 hours",
-        priceType: { kind: "fixed", amount: 65 },
-        optional: true,
-        checked: false,
-      },
-    ],
-    []
-  );
-  const [items, setItems] = useState<Item[]>(initialItems);
-
-  /** Body Corporate item */
-  const strataItem: Item = {
-    id: "body-corporate-cert",
-    label: "Body corporate info cert (standard BCCM Form 33)",
-    eta: "7 days",
-    priceType: { kind: "perLot", amount: 0 }, // variable per lot
-    checked: false,
-  };
-
-  const visibleItems = useMemo(() => {
-    if (propertyType === "strata") {
-      const exists = items.some((i) => i.id === strataItem.id);
-      return exists ? items : [...items, strataItem];
-    }
-    return items.filter((i) => i.id !== strataItem.id);
-  }, [items, propertyType]);
-
-  const total = useMemo(() => computeTotal(visibleItems), [visibleItems]);
-
-  const toggleItem = (id: string) => {
-    setItems((prev) =>
-      prev.map((it) => (it.id === id ? { ...it, checked: !it.checked } : it))
-    );
-  };
-
-  /** Search button */
-  const onSearch = () => {
-    if (lp || input.trim()) {
-      setShowResults(true);
-    }
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    console.log("Search:", { query, state: stateFilter });
   };
 
   return (
-    <main
-      className="min-h-screen"
-      style={{
-        background: BG,
-        color: TEXT,
-        display: "flex",
-        justifyContent: "center",
-      }}
-    >
-      <div className="w-full max-w-3xl p-6">
-        {/* Header */}
-        <h1 className="text-2xl font-bold mb-2 text-center" style={{ color: TEXT }}>
-          <strong>QLD Seller Disclosure Package</strong>
-        </h1>
-        <p className="text-center mb-6" style={{ color: TEXT }}>
-          Enter <u>an address</u> or <u>Lot/Plan</u> to see recommended searches.
+    <div className="space-y-6">
+      {/* Welcome header */}
+      <div>
+      <h1 className="text-2xl font-semibold">Welcome back!</h1>
+  <p className="text-sm text-neutral-600">
+    You have <b>{metrics.inProgress}</b> active orders and{" "}
+    <b>{metrics.needsAttention}</b> needing attention.
+  </p>
+      </div>
+
+      {/* Search bar with state dropdown */}
+      <section className="card">
+      <div>
+        <h1 className="text-2xl font-semibold">Property Search</h1>
+        <p className="text-sm text-neutral-600">
+          Search for properties using address, title reference, or lot/plan.
         </p>
-
-        {/* Input */}
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-full max-w-xl">
-            <label className="block text-sm font-medium mb-1">
-              Address or Lot/Plan
+      </div>
+        <form onSubmit={handleSearch} className="flex flex-col gap-3 md:flex-row">
+          <div className="md:w-40">
+            <label htmlFor="state" className="sr-only">
+              State
             </label>
-            <div className="flex items-center gap-2">
-              <div className="flex-1">
-                <AddressField
-                  value={input}
-                  onChange={(v) => {
-                    setInput(v);
-                    setVerified(false);
-                  }}
-                  onVerified={(ok) => setVerified(ok)}
-                />
-              </div>
-              {verified && !lp && (
-                <span
-                  aria-label="verified"
-                  title="Address verified"
-                  className="shrink-0"
-                  style={{ color: "#16a34a", fontSize: 20 }}
-                >
-                  ✔
-                </span>
-              )}
-            </div>
-            {lp && (
-              <div
-                className="mt-2 inline-flex items-center gap-2 rounded-md px-2 py-1 text-sm"
-                style={{ background: "#eef2ff", border: "1px solid #e0e7ff" }}
-              >
-                <span className="font-medium" style={{ color: "#3730a3" }}>
-                  Detected Lot/Plan:
-                </span>
-                <span style={{ color: "#3730a3" }}>
-                  Lot {lp.lot} {lp.planPrefix}
-                  {lp.planNumber}
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Property type */}
-          <div className="w-full max-w-xl">
-            <label className="text-sm font-medium mb-1">Property type</label>
             <select
-              value={propertyType}
-              onChange={(e) => setPropertyType(e.target.value as any)}
-              className="rounded-lg border px-3 py-2 w-full"
+              id="state"
+              value={stateFilter}
+              onChange={(e) => setStateFilter(e.target.value)}
+              className="w-full rounded-lg border bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-[#cc3369]"
             >
-              <option value="house">House / Non-strata</option>
-              <option value="strata">Strata</option>
+              {AU_STATES.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
             </select>
           </div>
 
+          <div className="flex-1">
+            <input
+              type="text"
+              placeholder="Enter address, title reference, or lot/plan"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="w-full rounded-lg border bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-[#cc3369]"
+            />
+          </div>
+
           <button
-            onClick={onSearch}
-            className="rounded-lg px-5 py-2 font-medium"
-            style={{
-              background: PRIMARY,
-              color: "white",
-              boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
-              marginTop: 4,
-            }}
+            type="submit"
+            className="rounded-lg bg-[#cc3369] px-4 py-2 text-white hover:opacity-90"
           >
             Search
           </button>
-        </div>
+        </form>
+      </section>
 
-        {/* Results */}
-        {showResults && (
-          <div className="mt-8">
-            <h2 className="text-lg font-semibold mb-3 text-center">
-              Recommended searches — QLD Seller Disclosure Package
-            </h2>
+      {/* Order Stats */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <CardStat
+          title="In Progress"
+          value={metrics.inProgress}
+          help="Searches being processed"
+        />
+        <CardStat title="Completed" value={metrics.completed} help="Finished this week" />
+        <CardStat
+          title="Needs Attention"
+          value={metrics.needsAttention}
+          help="Requires your input"
+        />
+      </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr
-                    style={{
-                      background: "#fafafa",
-                      borderBottom: "1px solid #eee",
-                      textAlign: "left",
-                    }}
-                  >
-                    <th className="py-2 pl-2 pr-3">Select</th>
-                    <th className="py-2 pr-3">Item</th>
-                    <th className="py-2 pr-3">ETA</th>
-                    <th className="py-2 pr-3 text-right">Price</th>
+      {/* Main Content */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          <section className="card">
+            <SectionHeader title="Recent Activity" link={{ href: "/", label: "View All" }} />
+            <ul className="mt-3 divide-y divide-neutral-200">
+              {RECENT_ACTIVITY.map((a) => (
+                <li key={a.id} className="flex items-center gap-3 py-3">
+                  <div className="text-xl">{a.icon ?? "•"}</div>
+                  <div className="flex-1">
+                    <Link href={a.href} className="block font-medium hover:underline">
+                      {a.title}
+                    </Link>
+                    <p className="text-sm text-neutral-600">
+                      {a.subtitle} • {a.ago}
+                    </p>
+                  </div>
+                  <Link href={a.href} className="text-sm text-[#cc3369] hover:underline">
+                    Open
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section className="card">
+            <SectionHeader title="Recent Orders" />
+            <div className="mt-3 overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="text-left text-neutral-500">
+                  <tr>
+                    <th className="px-2 py-2">Order ID</th>
+                    <th className="px-2 py-2">Type</th>
+                    <th className="px-2 py-2">Status</th>
+                    <th className="px-2 py-2">Date</th>
+                    <th className="px-2 py-2 text-right">Action</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {visibleItems.map((it) => (
-                    <tr key={it.id} className="border-b" style={{ borderColor: "#eee" }}>
-                      <td className="py-2 pl-2 pr-3 align-middle">
-                        <input
-                          type="checkbox"
-                          checked={it.checked}
-                          onChange={() => toggleItem(it.id)}
-                        />
+                <tbody className="divide-y divide-neutral-200">
+                  {RECENT_ORDERS.map((o) => (
+                    <tr key={o.id}>
+                      <td className="px-2 py-3 font-medium">{o.id}</td>
+                      <td className="px-2 py-3">{o.type}</td>
+                      <td className="px-2 py-3">
+                        <span
+                          className={`inline-flex rounded-full px-2 py-0.5 text-xs ${statusChipClass(
+                            o.status
+                          )}`}
+                        >
+                          {o.status}
+                        </span>
                       </td>
-                      <td className="py-2 pr-3 align-middle">
-                        {it.label}
-                        {it.optional && (
-                          <span className="ml-2 text-xs" style={{ color: "#6b7280" }}>
-                            (optional)
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-2 pr-3 align-middle">{it.eta}</td>
-                      <td className="py-2 pr-3 align-middle text-right">
-                        {priceLabel(it)}
+                      <td className="px-2 py-3">{o.date}</td>
+                      <td className="px-2 py-3 text-right">
+                        <Link href={o.href} className="text-[#cc3369] hover:underline">
+                          View
+                        </Link>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+          </section>
+        </div>
 
-            {/* Total */}
-            <div className="mt-5 flex items-center justify-between">
-              <div className="text-lg font-semibold">Total: {aud(total)}</div>
-              <button
-                className="rounded-lg px-5 py-2 font-medium"
-                style={{ background: PRIMARY, color: "white" }}
-                onClick={() => alert("Continue → Checkout (coming soon)")}
-              >
-                Continue
-              </button>
-            </div>
-          </div>
-        )}
+        <div className="space-y-6">
+          <section className="card">
+            <SectionHeader title="Notifications" />
+            <ul className="mt-3 space-y-2 text-sm">
+              <li className="rounded-lg bg-yellow-50 p-3 text-yellow-900">
+                2 VOI verifications require manual review.{" "}
+                <Link href="/voi/results" className="underline">
+                  Review now
+                </Link>
+                .
+              </li>
+              <li className="rounded-lg bg-blue-50 p-3 text-blue-900">
+                New: “VOI + AML Combo” package.{" "}
+                <Link href="/voi" className="underline">
+                  Start one
+                </Link>
+                .
+              </li>
+            </ul>
+          </section>
+
+          <section className="card">
+            <SectionHeader title="Trending Searches" link={{ href: "/", label: "View Catalog" }} />
+            <ul className="mt-3 divide-y divide-neutral-200">
+              {TRENDING.map((t) => (
+                <li key={t.label} className="flex justify-between py-3">
+                  <Link href={t.href} className="hover:underline">
+                    {t.label}
+                  </Link>
+                  <span className="text-sm text-neutral-500">{t.count}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
       </div>
-    </main>
+    </div>
+  );
+}
+
+/** Helpers */
+function SectionHeader({
+  title,
+  link,
+}: {
+  title: string;
+  link?: { href: string; label: string };
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <h2 className="text-base font-semibold">{title}</h2>
+      {link && (
+        <Link href={link.href} className="text-sm text-[#cc3369] hover:underline">
+          {link.label}
+        </Link>
+      )}
+    </div>
+  );
+}
+
+function CardStat({ title, value, help }: { title: string; value: number; help?: string }) {
+  return (
+    <div className="card">
+      <div className="text-sm text-neutral-500">{title}</div>
+      <div className="mt-1 text-3xl font-semibold">{value}</div>
+      {help && <div className="mt-1 text-xs text-neutral-500">{help}</div>}
+    </div>
   );
 }
