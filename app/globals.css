@@ -115,3 +115,15 @@ hr, .border-t, .border-b, .border { border-color: var(--line) !important; }
 }
 .stat-value { font-size: 28px; font-weight: 700; line-height: 1; }
 .stat-help  { font-size: 12px; color: var(--muted); }
+
+/* Outline button that matches .btn-primary's brand color */
+.btn-outline-primary {
+  border: 1px solid #cc3369;
+  color: #cc3369;
+  background: #fff;
+  border-radius: 0.5rem;
+  padding: 0.5rem 1rem;
+}
+.btn-outline-primary:hover {
+  background: #fff3f7;
+}
