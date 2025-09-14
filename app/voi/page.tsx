@@ -124,7 +124,7 @@ export default function VOIPage() {
 
       <div className="grid gap-4 md:grid-cols-2">
         {/* Flow selection */}
-        <div className="rounded-lg border p-4">
+        <div className="rounded-lg border p-4 bg-white shadow-sm">
           <h2 className="font-semibold mb-3">Verification type</h2>
           <div className="flex flex-col gap-2">
             <label className="flex items-center gap-2">
@@ -158,7 +158,7 @@ export default function VOIPage() {
         </div>
 
         {/* Delivery + Person details */}
-        <div className="rounded-lg border p-4">
+        <div className="rounded-lg border p-4 bg-white shadow-sm">
           <h2 className="font-semibold mb-3">Delivery & person</h2>
 
           {/* Only relevant to biometric flows */}
