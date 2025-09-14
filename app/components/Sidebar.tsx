@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 function Icon({ d }: { d: string }) {
   return (
@@ -13,6 +13,7 @@ function Icon({ d }: { d: string }) {
       strokeWidth={2}
       stroke="currentColor"
       className="h-5 w-5"
+      aria-hidden="true"
     >
       <path strokeLinecap="round" strokeLinejoin="round" d={d} />
     </svg>
@@ -47,8 +48,8 @@ function NavItem({
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const [openIndividual, setOpenIndividual] = useState(false);
 
+  // Keep this array flat so we can map easily
   const nav = [
     {
       href: "/",
@@ -65,15 +66,20 @@ export default function Sidebar() {
       label: "Company",
       d: "M3.75 21h16.5M4.5 3h15v18H4.5V3z",
     },
-    {
-      label: "Individual",
-      d: "M15.75 7.5a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 21a8.25 8.25 0 1115 0H4.5z",
-      children: [
-        { href: "/voi", label: "VOI / AML" },
-        { href: "/individual/asic", label: "ASIC Search" },
-        { href: "/individual/afsa", label: "AFSA Bankruptcy" },
-      ],
-    },
+  ] as const;
+
+  const individual = {
+    label: "Individual",
+    d: "M15.75 7.5a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 21a8.25 8.25 0 1115 0H4.5z",
+    children: [
+      // Use a consistent route prefix under /individual
+      { href: "/voi", label: "VOI / AML" },
+      { href: "/individual/asic", label: "ASIC Search" },
+      { href: "/individual/afsa", label: "AFSA Bankruptcy" },
+    ],
+  } as const;
+
+  const extras = [
     {
       href: "/digisign",
       label: "DigiSign",
@@ -84,62 +90,80 @@ export default function Sidebar() {
       label: "Orders",
       d: "M3.75 6.75h16.5v10.5H3.75V6.75zM3.75 6.75l8.25 5.25 8.25-5.25",
     },
-  ];
+  ] as const;
+
+  // Auto-open "Individual" when on a matching route.
+  const shouldOpenIndividual = useMemo(
+    () => pathname.startsWith("/individual") || pathname === "/voi",
+    [pathname]
+  );
+  const [openIndividual, setOpenIndividual] = useState<boolean>(shouldOpenIndividual);
 
   return (
-    <aside className="fixed left-0 top-0 h-full w-56 border-r border-neutral-200 bg-white p-4">
-      {/* Logo */}
-      <div className="mb-6 flex items-center gap-2">
-        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-red-500 text-white font-bold">
-          D
-        </div>
-        <span className="text-lg font-semibold text-neutral-800">UnityLite</span>
-      </div>
+    // IMPORTANT: offset below top header (56px assumed) and limit height
+    <aside className="fixed left-0 top-[56px] h-[calc(100vh-56px)] w-56 overflow-y-auto border-r border-neutral-200 bg-white p-4 z-30">
+      {/* Brand */}
+
 
       {/* Navigation */}
       <nav className="flex flex-col gap-1">
-        {nav.map((item) =>
-          item.children ? (
-            <div key={item.label}>
-              <button
-                onClick={() => setOpenIndividual((o) => !o)}
-                className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                  pathname.startsWith("/individual")
-                    ? "bg-rose-50 text-[#cc3369]"
-                    : "text-neutral-700 hover:bg-neutral-100"
-                }`}
-              >
-                <Icon d={item.d} />
-                {item.label}
-              </button>
-              {openIndividual && (
-                <div className="ml-8 mt-1 flex flex-col gap-1">
-                  {item.children.map((sub) => (
-                    <Link
-                      key={sub.href}
-                      href={sub.href}
-                      className={`block rounded-lg px-3 py-1.5 text-sm ${
-                        pathname === sub.href
-                          ? "text-[#cc3369] font-medium"
-                          : "text-neutral-600 hover:bg-neutral-100"
-                      }`}
-                    >
-                      {sub.label}
-                    </Link>
-                  ))}
-                </div>
-              )}
+        {nav.map((item) => (
+          <NavItem
+            key={item.href}
+            href={item.href}
+            label={item.label}
+            d={item.d}
+            active={pathname === item.href}
+          />
+        ))}
+
+        {/* Individual group */}
+        <div>
+          <button
+            type="button"
+            onClick={() => setOpenIndividual((o) => !o)}
+            aria-expanded={openIndividual}
+            className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+              pathname.startsWith("/individual")
+                ? "bg-rose-50 text-[#cc3369]"
+                : "text-neutral-700 hover:bg-neutral-100"
+            }`}
+          >
+            <Icon d={individual.d} />
+            {individual.label}
+          </button>
+
+          {openIndividual && (
+            <div className="ml-8 mt-1 flex flex-col gap-1">
+              {individual.children.map((sub) => {
+                const active = pathname === sub.href || pathname.startsWith(sub.href + "/");
+                return (
+                  <Link
+                    key={sub.href}
+                    href={sub.href}
+                    className={`block rounded-lg px-3 py-1.5 text-sm ${
+                      active
+                        ? "text-[#cc3369] font-medium"
+                        : "text-neutral-600 hover:bg-neutral-100"
+                    }`}
+                  >
+                    {sub.label}
+                  </Link>
+                );
+              })}
             </div>
-          ) : (
-            <NavItem
-              key={item.href}
-              href={item.href}
-              label={item.label}
-              d={item.d}
-              active={pathname === item.href}
-            />
-          )
-        )}
+          )}
+        </div>
+
+        {extras.map((item) => (
+          <NavItem
+            key={item.href}
+            href={item.href}
+            label={item.label}
+            d={item.d}
+            active={pathname === item.href}
+          />
+        ))}
       </nav>
     </aside>
   );
