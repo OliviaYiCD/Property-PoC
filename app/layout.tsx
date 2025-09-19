@@ -1,7 +1,6 @@
 import "./globals.css";
 import Script from "next/script";
 import { ClerkProvider } from "@clerk/nextjs";
-import TopHeader from "./components/TopHeader";
 import AppShell from "./components/AppShell";
 
 export const metadata = {
@@ -25,10 +24,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           />
         </head>
         <body style={{ background: BG, color: TEXT }}>
-          {/* Full-width top navigation */}
-          <TopHeader />
-
-          {/* Main app shell (conditionally shows sidebar on Dashboard only) */}
           <AppShell>{children}</AppShell>
 
           <style>{`

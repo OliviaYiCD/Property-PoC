@@ -1,37 +1,48 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import Sidebar from "./Sidebar";
-
-const HEADER_H = 56; // keep in sync with TopHeader height
-const SIDEBAR_W = 224; // 56 * 4 (Tailwind w-56)
+import TopHeader from "./TopHeader";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-
-  // If you want the sidebar on *all* pages:
   const showSidebar = !["/sign-in", "/sign-up"].includes(pathname);
-  // If you only wanted it on dashboard, you'd do: const showSidebar = pathname === "/";
+
+  // Default: open on desktop, closed on mobile
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setSidebarOpen(window.innerWidth >= 768);
+    }
+  }, []);
+
+  // ESC closes
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSidebarOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   return (
-    <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
-      {/* Sidebar is fixed; we always render it (except auth pages) */}
-      {showSidebar && <Sidebar />}
+    <div className="min-h-screen bg-white text-[#333] overflow-x-hidden">
+      {/* Header (no hamburger / no toggle prop) */}
+      <TopHeader />
 
-      {/* Main content: push right by sidebar width and down by header height */}
-      <div
-        className={
-          showSidebar
-            ? `ml-[${SIDEBAR_W}px] pt-[${HEADER_H}px]`
-            : `pt-[${HEADER_H}px]`
-        }
-        // Tailwind doesn’t accept arbitrary calc inside string interpolation here,
-        // so use the closest utilities:
-        // -> Alternatively, comment the above and use this:
-        // className={`${showSidebar ? "ml-56" : ""} pt-14`}
-      >
-        <main className="mx-auto w-full max-w-7xl px-6 py-6">{children}</main>
-      </div>
+      {showSidebar && (
+        <Sidebar
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+          onOpen={() => setSidebarOpen(true)}
+        />
+      )}
+
+      {/* Push content by header; only pad left when sidebar is open on md+ */}
+      <main className={`pt-14 ${showSidebar && sidebarOpen ? "md:pl-56" : ""}`}>
+        <div className="mx-auto w-full max-w-7xl px-6 py-6">{children}</div>
+      </main>
     </div>
   );
 }
