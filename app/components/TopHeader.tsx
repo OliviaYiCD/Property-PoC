@@ -1,9 +1,9 @@
+// app/components/TopHeader.tsx
 "use client";
 
 import Link from "next/link";
 import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs";
 
-// Tiny inline SVG mark so there's no external file to break.
 function LogoMark({ size = 28 }: { size?: number }) {
   return (
     <svg
@@ -21,7 +21,6 @@ function LogoMark({ size = 28 }: { size?: number }) {
         </linearGradient>
       </defs>
       <rect x="1" y="1" width="26" height="26" rx="8" fill="url(#ulite-g)" />
-      {/* U stroke (no font dependency) */}
       <path
         d="M8 7 v8 a6 6 0 0 0 12 0 V7"
         stroke="#fff"
@@ -37,19 +36,19 @@ function LogoMark({ size = 28 }: { size?: number }) {
 export default function TopHeader() {
   return (
     <header className="fixed top-0 left-0 right-0 z-40 h-14 border-b bg-white">
-      <div className="flex h-14 w-full items-center justify-between px-4 md:px-6">
-        {/* Left: Logo (no hamburger) */}
-        <Link href="/" className="flex items-center gap-2">
+      <div className="flex h-14 items-center justify-between px-4 md:px-6 gap-4">
+        {/* Left: Logo */}
+        <Link href="/" className="flex items-center gap-2 flex-shrink-0">
           <LogoMark />
           <span className="text-lg font-semibold text-neutral-800">UnityLite</span>
         </Link>
 
-        {/* Right: Search + Auth */}
-        <div className="flex items-center gap-3">
-          <div className="hidden md:flex items-center rounded-md border bg-gray-50 px-2 py-1">
+        {/* Middle: Full-width search bar */}
+        <div className="flex-1 max-w-2xl mx-4">
+          <div className="flex items-center rounded-md border bg-gray-50 px-3 py-1.5">
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              className="h-4 w-4 text-gray-500"
+              className="h-5 w-5 text-gray-500"
               fill="none"
               viewBox="0 0 24 24"
               strokeWidth={2}
@@ -62,10 +61,20 @@ export default function TopHeader() {
             </svg>
             <input
               type="text"
-              placeholder="Search"
-              className="ml-2 bg-transparent text-sm outline-none"
+              placeholder="Search orders, matters, products..."
+              className="ml-2 w-full bg-transparent text-sm outline-none"
             />
           </div>
+        </div>
+
+        {/* Right: Auth + Help */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            className="rounded-md border px-3 py-1.5 text-sm hover:bg-gray-100"
+            onClick={() => alert("Help center coming soon!")}
+          >
+            Help
+          </button>
 
           <SignedOut>
             <SignInButton mode="modal">
