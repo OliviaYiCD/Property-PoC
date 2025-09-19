@@ -27,7 +27,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <div className="min-h-screen bg-white text-[#333] overflow-x-hidden">
+    <div className="min-h-screen bg-neutral-150 text-[#333] overflow-x-hidden">
       {/* Header (no hamburger / no toggle prop) */}
       <TopHeader />
 
