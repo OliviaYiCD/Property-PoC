@@ -2,7 +2,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useUser } from "@clerk/nextjs";
+import BannerCarousel from "./components/BannerCarousel";
 
 /** ------------------------------
  *  MOCK DATA
@@ -28,61 +30,16 @@ interface ActivityItem {
 }
 
 const RECENT_ACTIVITY: ActivityItem[] = [
-  {
-    id: "a1",
-    title: "123 Maple Street, Anytown",
-    subtitle: "Property Search",
-    ago: "2 hours ago",
-    href: "/",
-    icon: "🏠",
-  },
-  {
-    id: "a2",
-    title: "Acme Corp",
-    subtitle: "Company Due Diligence",
-    ago: "1 day ago",
-    href: "/company",
-    icon: "🏢",
-  },
-  {
-    id: "a3",
-    title: "Client Verification – John Smith",
-    subtitle: "VOI + AML Check",
-    ago: "3 days ago",
-    href: "/voi",
-    icon: "🪪",
-  },
+  { id: "a1", title: "123 Maple Street, Anytown", subtitle: "Property Search", ago: "2 hours ago", href: "/", icon: "🏠" },
+  { id: "a2", title: "Acme Corp", subtitle: "Company Due Diligence", ago: "1 day ago", href: "/company", icon: "🏢" },
+  { id: "a3", title: "Client Verification – John Smith", subtitle: "VOI + AML Check", ago: "3 days ago", href: "/voi", icon: "🪪" },
 ];
 
 const RECENT_ORDERS: OrderRow[] = [
-  {
-    id: "#LS-1024",
-    type: "Property",
-    status: "In Progress",
-    date: "2025-03-10",
-    href: "/",
-  },
-  {
-    id: "#LS-1023",
-    type: "Company",
-    status: "Completed",
-    date: "2025-03-09",
-    href: "/company",
-  },
-  {
-    id: "#LS-1022",
-    type: "VOI",
-    status: "Needs Attention",
-    date: "2025-03-08",
-    href: "/voi",
-  },
-  {
-    id: "#LS-1021",
-    type: "AML",
-    status: "Completed",
-    date: "2025-03-07",
-    href: "/voi",
-  },
+  { id: "#LS-1024", type: "Property", status: "In Progress", date: "2025-03-10", href: "/" },
+  { id: "#LS-1023", type: "Company", status: "Completed", date: "2025-03-09", href: "/company" },
+  { id: "#LS-1022", type: "VOI", status: "Needs Attention", date: "2025-03-08", href: "/voi" },
+  { id: "#LS-1021", type: "AML", status: "Completed", date: "2025-03-07", href: "/voi" },
 ];
 
 const TRENDING = [
@@ -92,115 +49,89 @@ const TRENDING = [
   { label: "Historical Title Search", count: 56, href: "/" },
 ];
 
-const AU_STATES = [
-  { value: "QLD", label: "QLD" },
-  { value: "NSW", label: "NSW" },
-  { value: "VIC", label: "VIC" },
-  { value: "SA", label: "SA" },
-  { value: "WA", label: "WA" },
-  { value: "TAS", label: "TAS" },
-  { value: "ACT", label: "ACT" },
-  { value: "NT", label: "NT" },
-];
-
 function statusChipClass(s: OrderStatus) {
   if (s === "Completed") return "bg-green-100 text-green-800";
   if (s === "Needs Attention") return "bg-yellow-100 text-yellow-900";
   return "bg-blue-100 text-blue-800";
 }
 
-/** ------------------------------
- *  PAGE
- *  ------------------------------ */
 export default function DashboardPage() {
+  const { user } = useUser();
+  const firstName = user?.firstName || "";
+
   const metrics = useMemo(() => {
-    const inProgress =
-      RECENT_ORDERS.filter((o) => o.status === "In Progress").length + 12;
-    const completed =
-      RECENT_ORDERS.filter((o) => o.status === "Completed").length + 5;
-    const needsAttention =
-      RECENT_ORDERS.filter((o) => o.status === "Needs Attention").length + 2;
+    const inProgress = RECENT_ORDERS.filter((o) => o.status === "In Progress").length + 12;
+    const completed = RECENT_ORDERS.filter((o) => o.status === "Completed").length + 5;
+    const needsAttention = RECENT_ORDERS.filter((o) => o.status === "Needs Attention").length + 2;
     return { inProgress, completed, needsAttention };
   }, []);
 
-  const [query, setQuery] = useState("");
-  const [stateFilter, setStateFilter] = useState<string>("");
+  const slides = [
+    {
+      eyebrow: "TIP",
+      title: "Bulk Property Title Search",
+      desc: "Upload CSV to run state-wide property queries in minutes.",
+      cta: { label: "Upload CSV", href: "/property" },
+      bg: "bg-blue-600",
+    },
+    {
+      eyebrow: "UPDATE",
+      title: "Company Director Search just got faster",
+      desc: "We’ve tuned our ASIC integration for snappier results.",
+      cta: { label: "See details", href: "/company" },
+      bg: "bg-indigo-600",
+    },
+    {
+      eyebrow: "NEW FEATURE",
+      title: "Sharpen Your Workflow with VOI + AML Combo",
+      desc: "Run both checks in one go and save up to 30% time per client.",
+      cta: { label: "Try it now", href: "/voi" },
+      bg: "bg-teal-600",
+    },
+  ];
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log("Search:", { query, state: stateFilter });
-  };
+  const MONTHLY_SPEND = 324208;
 
   return (
     <div className="space-y-6">
       {/* Welcome header */}
       <div>
-      <h1 className="text-2xl font-semibold">Welcome back!</h1>
-  <p className="text-sm text-neutral-600">
-    You have <b>{metrics.inProgress}</b> active orders and{" "}
-    <b>{metrics.needsAttention}</b> needing attention.
-  </p>
-      </div>
-
-      {/* Search bar with state dropdown */}
-      <section className="card">
-      <div>
-        <h1 className="text-2xl font-semibold">Property Search</h1>
+        <h1 className="text-2xl font-semibold">
+          Welcome back{firstName ? `, ${firstName}` : ""}!
+        </h1>
         <p className="text-sm text-neutral-600">
-          Search for properties using address, title reference, or lot/plan.
+          You have <b>{metrics.inProgress}</b> active orders and <b>{metrics.needsAttention}</b> needing attention.
         </p>
       </div>
-        <form onSubmit={handleSearch} className="flex flex-col gap-3 md:flex-row">
-          <div className="md:w-40">
-            <label htmlFor="state" className="sr-only">
-              State
-            </label>
-            <select
-              id="state"
-              value={stateFilter}
-              onChange={(e) => setStateFilter(e.target.value)}
-              className="w-full rounded-lg border bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-[#cc3369]"
-            >
-              {AU_STATES.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
+
+      {/* Top row: Monthly Spending (left, 1/3) + Banner (right, 2/3 compact) */}
+      <section className="grid grid-cols-1 gap-4 lg:grid-cols-3 items-stretch">
+        {/* Left card */}
+        <div className="card flex flex-col justify-between">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Monthly Spending</div>
+            <div className="mt-2 text-3xl font-semibold">
+              {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(
+                MONTHLY_SPEND
+              )}
+            </div>
+            <div className="mt-1 text-xs text-neutral-500">Across all products in the last 30 days</div>
           </div>
 
-          <div className="flex-1">
-            <input
-              type="text"
-              placeholder="Enter address, title reference, or lot/plan"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="w-full rounded-lg border bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-[#cc3369]"
-            />
-          </div>
+          {/* optional tiny sparkline placeholder */}
+        </div>
 
-          <button
-            type="submit"
-            className="rounded-lg bg-[#cc3369] px-4 py-2 text-white hover:opacity-90"
-          >
-            Search
-          </button>
-        </form>
+        {/* Right: banner spans 2 columns */}
+        <div className="lg:col-span-2">
+          <BannerCarousel slides={slides} compact className="shadow-sm" />
+        </div>
       </section>
 
       {/* Order Stats */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <CardStat
-          title="In Progress"
-          value={metrics.inProgress}
-          help="Searches being processed"
-        />
+        <CardStat title="In Progress" value={metrics.inProgress} help="Searches being processed" />
         <CardStat title="Completed" value={metrics.completed} help="Finished this week" />
-        <CardStat
-          title="Needs Attention"
-          value={metrics.needsAttention}
-          help="Requires your input"
-        />
+        <CardStat title="Needs Attention" value={metrics.needsAttention} help="Requires your input" />
       </div>
 
       {/* Main Content */}
@@ -248,9 +179,7 @@ export default function DashboardPage() {
                       <td className="px-2 py-3">{o.type}</td>
                       <td className="px-2 py-3">
                         <span
-                          className={`inline-flex rounded-full px-2 py-0.5 text-xs ${statusChipClass(
-                            o.status
-                          )}`}
+                          className={`inline-flex rounded-full px-2 py-0.5 text-xs ${statusChipClass(o.status)}`}
                         >
                           {o.status}
                         </span>
@@ -275,17 +204,11 @@ export default function DashboardPage() {
             <ul className="mt-3 space-y-2 text-sm">
               <li className="rounded-lg bg-yellow-50 p-3 text-yellow-900">
                 2 VOI verifications require manual review.{" "}
-                <Link href="/voi/results" className="underline">
-                  Review now
-                </Link>
-                .
+                <Link href="/voi/results" className="underline">Review now</Link>.
               </li>
               <li className="rounded-lg bg-blue-50 p-3 text-blue-900">
                 New: “VOI + AML Combo” package.{" "}
-                <Link href="/voi" className="underline">
-                  Start one
-                </Link>
-                .
+                <Link href="/voi" className="underline">Start one</Link>.
               </li>
             </ul>
           </section>
@@ -310,13 +233,7 @@ export default function DashboardPage() {
 }
 
 /** Helpers */
-function SectionHeader({
-  title,
-  link,
-}: {
-  title: string;
-  link?: { href: string; label: string };
-}) {
+function SectionHeader({ title, link }: { title: string; link?: { href: string; label: string } }) {
   return (
     <div className="flex items-center justify-between">
       <h2 className="text-base font-semibold">{title}</h2>
