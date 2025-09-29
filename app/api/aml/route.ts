@@ -31,6 +31,33 @@ async function follow(url: string, init: RequestInit, maxRedirects = 2) {
   return resp;
 }
 
+// --- Health check for browsers ---
+export async function GET() {
+  return NextResponse.json({
+    ok: true,
+    route: "/api/aml",
+    hasBase: Boolean(process.env.REALAML_BASE_URL),
+    hasKey: Boolean(process.env.REALAML_API_KEY),
+  });
+}
+
+// Optional: make preflights happy if you ever call this cross-origin
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    },
+  });
+}
+
+export async function HEAD() {
+  return new NextResponse(null, { status: 200 });
+}
+
+// --- Proxy for RealAML ---
 export async function POST(req: Request) {
   if (!BASE || !KEY) {
     return NextResponse.json({ error: "Missing REALAML env vars" }, { status: 500 });
@@ -61,7 +88,10 @@ export async function POST(req: Request) {
       try { data = JSON.parse(raw); } catch {}
     }
 
-    return NextResponse.json({ url: url.toString(), status: upstream.status, ok: upstream.ok, data }, { status: upstream.status });
+    return NextResponse.json(
+      { url: url.toString(), status: upstream.status, ok: upstream.ok, data },
+      { status: upstream.status }
+    );
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "proxy failed" }, { status: 500 });
   }
